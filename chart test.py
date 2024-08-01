@@ -3,10 +3,10 @@ import plotly.graph_objs as go
 import plotly.offline as pyo
 
 # Read data from Excel for Threats
-df_threats = pd.read_excel(r"C:\Users\LucanSinclair\OneDrive - Earthwatch\Desktop\Test\test.xlsx", sheet_name='Threats')
+df_threats = pd.read_excel(r"C:\Users\LucanSinclair\OneDrive - Earthwatch\Desktop\Code\Earthwatch_Code\Saltmarsh-Savers\test.xlsx", sheet_name='Threats')
 
 # Read data from Excel for Values
-df_values = pd.read_excel(r"C:\Users\LucanSinclair\OneDrive - Earthwatch\Desktop\Test\test.xlsx", sheet_name='Values')
+df_values = pd.read_excel(r"C:\Users\LucanSinclair\OneDrive - Earthwatch\Desktop\Code\Earthwatch_Code\Saltmarsh-Savers\test.xlsx", sheet_name='Values')
 
 # Threats Chart
 inner_labels = df_threats['Category'].dropna().tolist()
@@ -30,8 +30,12 @@ data_threats = [
         hole=0.5,
         direction='clockwise',
         sort=False,
-        marker={'colors': inner_colors}
-    ),
+        marker={'colors': inner_colors},
+        hovertemplate='%{label}: %{value:.1f}%<extra></extra>',  # Limit decimal places to 1  
+         texttemplate='%{label}',
+         showlegend=False
+        ),
+
     go.Pie(
         values=outer_values,
         labels=outer_labels,
@@ -40,7 +44,9 @@ data_threats = [
         direction='clockwise',
         sort=False,
         marker={'colors': outer_colors},
-        showlegend=False
+        hovertemplate='%{label}: %{value:.1f}%<extra></extra>',  # Limit decimal places to 1
+        texttemplate='%{value:.1f}%',  # Limit decimal places to 1 in labels
+        
     )
 ]
 
@@ -53,7 +59,7 @@ layout_threats = go.Layout(
         font=dict(size=10),
         bgcolor='rgba(0,0,0,0)'
     ),
-  margin=dict(l=50, r=150, t=50, b=50),  # Increase right margin to accommodate the legend
+    margin=dict(l=50, r=150, t=50, b=50),  # Increase right margin to accommodate the legend
     annotations=[
         dict(
             text='37.85',  # Text to display in the center
@@ -68,25 +74,44 @@ fig_threats = go.Figure(data=data_threats, layout=layout_threats)
 pyo.plot(fig_threats, filename='threats_chart.html')
 
 # Values Chart
-values_labels = df_values['Category'].dropna().tolist()
-values_values = df_values['Value'].dropna().tolist()
+inner_labels_values = df_values['Category'].dropna().tolist()
+inner_values_values = df_values['Value'].dropna().tolist()
+outer_labels_values = df_values['Subcategory'].dropna().tolist()
+outer_values_values = df_values['Subvalue'].dropna().tolist()
 
-# Define sequential shades of green
-values_colors = [
+# Define colors for 6 categories and 22 subcategories
+inner_colors_values = [ '#5cbfe6', '#10968f', '#fdca5a', '#89bb4d', '#ef8165', '#f15740']  # Different shades of green for categories
+outer_colors_values = [
     '#E6F2E6', '#CCE5CC', '#B3D8B3', '#99CC99', '#80BF80', '#66B266', '#4DA64D', '#339933', '#1A8C1A', '#008000',
-    '#007300', '#006600', '#005900', '#004C00', '#003F00', '#003300', '#002600', '#001900', '#001300', '#000D00',
-    '#000C00', '#000000'
+'#007A00', '#007300', '#006D00', '#006600', '#006000', '#005900', '#005300', '#004C00', '#004600', '#004000',
+'#003A00', '#003300'
 ]
 
 data_values = [
     go.Pie(
-        values=values_values,
-        labels=values_labels,
-        domain={'x': [0, 1], 'y': [0, 1]},  # Use the full domain for the pie chart
+        values=inner_values_values,
+        labels=inner_labels_values,
+        domain={'x': [0.2, 0.8], 'y': [0.1, 0.9]},
         hole=0.5,
         direction='clockwise',
         sort=False,
-        marker={'colors': values_colors}
+        marker={'colors': inner_colors_values},
+        hovertemplate='%{label}: %{value:.1f}%<extra></extra>',  # Limit decimal places to 1 
+        texttemplate='%{label}',
+        showlegend=False
+        ),
+
+    go.Pie(
+        values=outer_values_values,
+        labels=outer_labels_values,
+        domain={'x': [0.1, 0.9], 'y': [0, 1]},
+        hole=0.75,
+        direction='clockwise',
+        sort=False,
+        marker={'colors': outer_colors_values},
+        hovertemplate='%{label}: %{value:.1f}%<extra></extra>',  # Limit decimal places to 1
+        texttemplate='%{value:.1f}%',
+        
     )
 ]
 
