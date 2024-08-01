@@ -59,6 +59,8 @@ layout_threats = go.Layout(
         font=dict(size=10),
         bgcolor='rgba(0,0,0,0)'
     ),
+    width=800,  # Set the width of the graph
+    height=800, # Set the height of the graph
     margin=dict(l=50, r=150, t=50, b=50),  # Increase right margin to accommodate the legend
     annotations=[
         dict(
@@ -124,6 +126,8 @@ layout_values = go.Layout(
         font=dict(size=10),
         bgcolor='rgba(0,0,0,0)'
     ),
+    width=800,  # Set the width of the graph
+    height=800, # Set the height of the graph
     margin=dict(l=50, r=150, t=50, b=50),  # Increase right margin to accommodate the legend
     annotations=[
         dict(
