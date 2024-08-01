@@ -7,12 +7,19 @@
     <style>
         .container {
             display: flex;
+            flex-wrap: wrap; /* Allow wrapping to handle smaller screens */
             justify-content: space-around;
         }
         iframe {
-            width: 600px; /* Set a fixed width */
-            height: 600px; /* Set a fixed height */
+            width: 45%; /* Use percentage-based width */
+            height: 400px; /* Set a flexible height */
             border: none;
+            margin-bottom: 20px; /* Add some space between rows */
+        }
+        @media (max-width: 768px) {
+            iframe {
+                width: 100%; /* Full width on smaller screens */
+            }
         }
     </style>
 </head>
