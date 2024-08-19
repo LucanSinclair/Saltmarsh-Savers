@@ -1,0 +1,4 @@
+dash
+pandas
+os
+plotly

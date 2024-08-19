@@ -268,7 +268,18 @@ def update_value_donut_chart(click_data):
         'xanchor': 'center',
         'yanchor': 'top'
     },
-    margin=dict(t=30, l=10, r=10, b=0)  # Adjust margins if needed
+    margin=dict(t=30, l=10, r=10, b=0),  # Adjust margins if needed
+    #annotations=[
+        #dict(
+            #x=0.5,  # X position of the annotation
+            #y=0.5,  # Y position of the annotation
+            #text="6",  # Custom text to display
+            #showarrow=False,
+            #font=dict(size=40, color="white"),
+            #xanchor='center',
+            #yanchor='middle'
+        #)
+    #],
 )
     
     return fig
