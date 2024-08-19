@@ -34,7 +34,7 @@ zoom_level = calculate_zoom(min_lat, max_lat, min_lon, max_lon)
 
 # Initialize the Dash app
 app = Dash(__name__)
-
+server = app.server
 
 app.layout = html.Div([
     html.Header([
