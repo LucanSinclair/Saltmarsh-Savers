@@ -182,40 +182,59 @@ def update_donut_chart(click_data):
     filtered_data = data[data['Sheet'] == worksheet]
 
     # Prepare the data for the donut chart (Threat Type and Threat Score)
-    threat_data = filtered_data[['Threat Type', 'Threat Score']].groupby('Threat Type').sum().reset_index()
+    threat_data = filtered_data[['Overall Threat Score', 'Threat Type', 'Threat', 'Threat Score']].groupby(['Overall Threat Score', 'Threat Type', 'Threat']).sum().reset_index()
 
     # Create a list of labels, parents, and values for the sunburst chart
-    threat_labels = threat_data['Threat Type'].tolist()
-    data_labels = filtered_data['Threat'].tolist()
-    data_scores = filtered_data['Threat Score'].tolist()
+    overall_threat_labels = threat_data['Overall Threat Score'].unique().tolist()
+    threat_labels = threat_data['Threat Type'].unique().tolist()
+    data_labels = threat_data['Threat'].tolist()
+    data_scores = threat_data['Threat Score'].tolist()
 
-    labels = threat_labels + [f"{label} ({value:.1f})" for label, value in zip(data_labels, data_scores)]
-    parents = [''] * len(threat_labels) + filtered_data['Threat Type'].tolist()
-    inside_text = [f"{value:.1f}" for value in threat_data['Threat Score']] + [f"{value:.1f}" for value in data_scores]
+    # Create labels for overall threat score, threat types, and threats
+    labels = overall_threat_labels + threat_labels + data_labels
+
+    # Create parents for each level
+    overall_threat_parents = [''] * len(overall_threat_labels)
+    threat_parents = [threat_data.loc[threat_data['Threat Type'] == threat, 'Overall Threat Score'].values[0] for threat in threat_labels]
+    data_parents = threat_data['Threat Type'].tolist()
+
+    # Combine all parents
+    parents = overall_threat_parents + threat_parents + data_parents
+
+    # Set values for each level
+    overall_threat_values = [threat_data[threat_data['Overall Threat Score'] == cat]['Threat Score'].sum() for cat in overall_threat_labels]
+    threat_values = [threat_data[threat_data['Threat Type'] == threat]['Threat Score'].sum() for threat in threat_labels]
+    values = overall_threat_values + threat_values + data_scores
+
+    # Create inside text for each level
+    inside_text = [""] + [f"{value:.1f}" for value in threat_values] + [f"{value:.1f}" for value in data_scores ]
 
     # Create a sunburst chart using Plotly Graph Objects
     fig = go.Figure()
 
     # Add the sunburst chart (Threat Type and Threat Score)
     fig.add_trace(go.Sunburst(
-        labels=labels,
-        parents=parents,
-        values=threat_data['Threat Score'].tolist() + data_scores,  # Ensure values are correctly set
-        branchvalues='total',
-        hoverinfo='label',  # Only show the label in the hover information
-        text=inside_text,
-        name='Threat Type'
+    labels=labels,
+    parents=parents,
+    values=values,  # Ensure values are correctly set
+    branchvalues='total',
+    hoverinfo='label',  # Only show the label in the hover information
+    text=inside_text,
+    name='Threat Type',
+    insidetextfont=dict(size=16),  # Set the font size for the inside text
+    outsidetextfont=dict(size=30) 
     ))
 
+    
     fig.update_layout(
-    title={
-        'text': "Threats",
-        'y': 0.82,  # Adjust this value to move the title closer to the donut graph
-        'x': 0.5,  # Center the title horizontally
-        'xanchor': 'center',
-        'yanchor': 'top'
-    },
-    margin=dict(t=30, l=10, r=10, b=10)  # Adjust margins if needed
+        title={
+            'text': "Threats",
+            'y': 0.82,  # Adjust this value to move the title closer to the donut graph
+            'x': 0.5,  # Center the title horizontally
+            'xanchor': 'center',
+            'yanchor': 'top'
+        },
+        margin=dict(t=30, l=10, r=10, b=10)  # Adjust margins if needed
 )
 
     return fig
@@ -234,53 +253,60 @@ def update_value_donut_chart(click_data):
     # Filter the data for the clicked location's worksheet
     filtered_data = data[data['Sheet'] == worksheet]
 
-    # Prepare the data for the second donut chart (Value Type and Value Score)
-    value_data = filtered_data[['Value Type', 'Value Score']].groupby('Value Type').sum().reset_index()
+    # Prepare the data for the second donut chart (Overall Value Score, Value Type, and Value Score)
+    value_data = filtered_data[['Overall Value Score', 'Value Type', 'Value', 'Value Score']].groupby(['Overall Value Score', 'Value Type', 'Value']).sum().reset_index()
 
     # Create a list of labels, parents, and values for the sunburst chart
-    value_labels = value_data['Value Type'].tolist()
-    value_data_labels = filtered_data['Value'].tolist()
-    value_data_scores = filtered_data['Value Score'].tolist()
+    overall_value_labels = value_data['Overall Value Score'].unique().tolist()
+    value_type_labels = value_data['Value Type'].unique().tolist()
+    value_labels = value_data['Value'].tolist()
+    value_scores = value_data['Value Score'].tolist()
 
-    labels = value_labels + [f"{label} ({value:.1f})" for label, value in zip(value_data_labels, value_data_scores)]
-    parents = [''] * len(value_labels) + filtered_data['Value Type'].tolist()
-    inside_text = [f"{value:.1f}" for value in value_data['Value Score']] + [f"{value:.1f}" for value in value_data_scores]
+    # Create labels for overall value score, value types, and values
+    labels = overall_value_labels + value_type_labels + value_labels
+
+    # Create parents for each level
+    overall_value_parents = [''] * len(overall_value_labels)
+    value_type_parents = [value_data.loc[value_data['Value Type'] == value_type, 'Overall Value Score'].values[0] for value_type in value_type_labels]
+    value_parents = value_data['Value Type'].tolist()
+
+    # Combine all parents
+    parents = overall_value_parents + value_type_parents + value_parents
+
+    # Set values for each level
+    overall_value_values = [value_data[value_data['Overall Value Score'] == cat]['Value Score'].sum() for cat in overall_value_labels]
+    value_type_values = [value_data[value_data['Value Type'] == value_type]['Value Score'].sum() for value_type in value_type_labels]
+    values = overall_value_values + value_type_values + value_scores
+
+    # Create inside text for each level
+    inside_text =[""] + [f"{value:.1f}" for value in overall_value_values] + [f"{value:.1f}" for value in value_type_values] + [f"{value:.1f}" for value in value_scores]
 
     # Create a sunburst chart using Plotly Graph Objects
     fig = go.Figure()
 
-    # Add the sunburst chart (Value Type and Value Score)
+    # Add the sunburst chart (Overall Value Score, Value Type, and Value Score)
     fig.add_trace(go.Sunburst(
         labels=labels,
         parents=parents,
-        values=value_data['Value Score'].tolist() + value_data_scores,  # Ensure values are correctly set
+        values=values,  # Ensure values are correctly set
         branchvalues='total',
         hoverinfo='label',  # Only show the label in the hover information
         text=inside_text,
-        name='Value Type'
+        name='Value Type',
+        insidetextfont=dict(size=16),  # Set the font size for the inside text
+        outsidetextfont=dict(size=30)
     ))
 
     fig.update_layout(
-    title={
-        'text': "Values",
-        'y': 0.82,  # Adjust this value to move the title closer to the donut graph
-        'x': 0.5,  # Center the title horizontally
-        'xanchor': 'center',
-        'yanchor': 'top'
-    },
-    margin=dict(t=30, l=10, r=10, b=0),  # Adjust margins if needed
-    #annotations=[
-        #dict(
-            #x=0.5,  # X position of the annotation
-            #y=0.5,  # Y position of the annotation
-            #text="6",  # Custom text to display
-            #showarrow=False,
-            #font=dict(size=40, color="white"),
-            #xanchor='center',
-            #yanchor='middle'
-        #)
-    #],
-)
+        title={
+            'text': "Values",
+            'y': 0.82,  # Adjust this value to move the title closer to the donut graph
+            'x': 0.5,  # Center the title horizontally
+            'xanchor': 'center',
+            'yanchor': 'top'
+        },
+        margin=dict(t=30, l=10, r=10, b=0),  # Adjust margins if needed
+    )
     
     return fig
     
