@@ -1,5 +1,3 @@
-import os
-import datacube
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -16,13 +14,7 @@ from dea_tools.dask import create_local_dask_cluster
 
 import os
 import datacube
-import numpy as np
-import pandas as pd
-import xarray as xr
-import datetime as dt
-import matplotlib.pyplot as plt
 import seaborn as sns
-
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -36,6 +28,7 @@ dc = datacube.Datacube(app='Vegetation_phenology')
 lat_min, lat_max = -16.864381, -16.864535
 lon_min, lon_max = 145.757198, 145.757532
 
+    
 # Set the range of dates for the analysis
 time_range = ('2016-04-19', '2023-05-13')
 

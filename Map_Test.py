@@ -4,13 +4,20 @@ import plotly.graph_objects as go
 import os
 from dash import Dash, dcc, html, Input, Output
 
-# Define the path to the Excel file
-file_path = os.path.join(os.path.dirname(__file__), 'data.xlsx')
+# Define the path to the directory containing the Excel files
+data_dir = os.path.join(os.path.dirname(__file__), 'data')
 
-# Load the Excel data from multiple sheets and add a column to identify the worksheet
-sheet_names = pd.ExcelFile(file_path).sheet_names
-data_frames = [pd.read_excel(file_path, sheet_name=sheet).assign(Sheet=sheet) for sheet in sheet_names]
+# Load the Excel data from multiple files and add a column to identify the year
+years = [2023, 2024]  # Add more years as needed
+data_frames = []
+for year in years:
+    file_path = os.path.join(data_dir, f'data_{year}.xlsx')
+    sheet_names = pd.ExcelFile(file_path).sheet_names
+    for sheet in sheet_names:
+        df = pd.read_excel(file_path, sheet_name=sheet).assign(Year=year, Sheet=sheet)
+        data_frames.append(df)
 data = pd.concat(data_frames, ignore_index=True)
+print(f"Data Loaded:\n{data.head()}")
 
 # Calculate the bounding box of the data points
 min_lat = data['Latitude'].min()
@@ -34,8 +41,8 @@ zoom_level = calculate_zoom(min_lat, max_lat, min_lon, max_lon)
 
 # Initialize the Dash app
 app = Dash(__name__)
-server = app.server
 
+# Define the layout of the app
 app.layout = html.Div([
     html.Header([
         html.Div([
@@ -73,25 +80,35 @@ app.layout = html.Div([
         'left': '0',
         'zIndex': '1000',  # Ensure the header is on top
     }),
-html.Div([
     html.Div([
-        dcc.Graph(id='map', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
-    ], style={'width': '50%', 'height': '500px', 'minHeight': '500px'}),
+        html.Div([
+            dcc.Graph(id='map', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
+        ], style={'width': '50%', 'height': '500px', 'minHeight': '500px', 'margin': 'auto'}),
+        html.Div([
+            dcc.Graph(id='donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
+        ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'}),
+        html.Div([
+            dcc.Graph(id='value-donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'})
+        ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'})
+    ], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'center', 'marginTop': '80px', 'height': '500px', 'flexShrink': '0', 'marginBottom': '25px'}),
     html.Div([
-        dcc.Graph(id='donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
-    ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'}),
-    html.Div([
-        dcc.Graph(id='value-donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'})
-    ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'})
-], style={'display': 'flex', 'marginTop': '80px', 'height': '500px', 'flexShrink': '0'}),
-html.Footer([
+        dcc.Slider(
+            id='year-slider',
+            min=min(years),
+            max=max(years),
+            value=max(years),
+            marks={str(year): {'label': str(year), 'style': {'font-size': '14px', 'font-family': 'Arial, sans-serif'}} for year in years},
+            step=None
+        )
+    ], style={'width': '50%', 'margin': 'auto'}),
+    html.Footer([
         html.P("", style={
             'color': 'white',
             'font-family': 'Arial, sans-serif',
             'font-size': '12px',
             'margin': '0'  # Remove default margin
         }),
-     html.Button("Contact us", style={
+        html.Button("Contact us", style={
             'backgroundColor': 'transparent',
             'border': '1.5px solid #58a70f',
             'borderRadius': '20px',  # Make the button oval
@@ -118,26 +135,51 @@ html.Footer([
     })
 ])
 
+print("Layout defined")
+server = app.server
+
 @app.callback(
     [Output("map", "figure"),
      Output("donut-chart", "style"),
      Output("value-donut-chart", "style")],
-    Input("map", "clickData")
+    [Input("map", "clickData"),
+     Input('year-slider', 'value')]
 )
-def update_map(click_data):
+def update_map(click_data, selected_year):
+    print("update_map function called")
+    # Filter the data based on the selected year
+    filtered_data = data[data['Year'] == selected_year]
+    
+    print(f"Selected Year: {selected_year}")
+    print(f"Filtered Data:\n{filtered_data.head()}")
+
+    color_mapping = [
+        (lambda x: x < 2.0, 'green'),
+        (lambda x: 2.0 <= x < 3.0, 'orange'),
+        (lambda x: x >= 3.0, 'red')
+    ]
+
+    def get_color_for_value(value):
+        for condition, color in color_mapping:
+            if condition(value):
+                return color
+        return 'grey'  # Default color if no condition matches
+    
+    filtered_data['Color'] = filtered_data['TVR'].apply(get_color_for_value)
+
     # Create a map using Plotly Graph Objects with clustering enabled
     fig = go.Figure(go.Scattermapbox(
-        lat=data['Latitude'],
-        lon=data['Longitude'],
+        lat=filtered_data['Latitude'],
+        lon=filtered_data['Longitude'],
         mode='markers',
         marker=go.scattermapbox.Marker(
             size=14,
-            color='#0a77a9',
+            color=filtered_data['Color'],
             opacity=0.7
         ),
-        text=data['Location'],
+        text=filtered_data['Location'],
         hoverinfo='text',
-        customdata=data['Sheet'],  # Add custom data for each point
+        customdata=filtered_data['Sheet'],  # Add custom data for each point
          hoverlabel=dict(
             bgcolor='#02964a',  # Set the background color of the hover text
             font=dict(
@@ -151,7 +193,7 @@ def update_map(click_data):
             color='#0a77a9'  # Set the color of the cluster dots
         )
     ))
-    
+   
     fig.update_layout(
         mapbox=dict(
             style="open-street-map",
@@ -169,17 +211,18 @@ def update_map(click_data):
 
 @app.callback(
     Output("donut-chart", "figure"),
-    Input("map", "clickData")
+    [Input("map", "clickData"),
+     Input('year-slider', 'value')]
 )
-def update_donut_chart(click_data):
+def update_donut_chart(click_data, selected_year):
     if not click_data:
         return go.Figure()  # Return an empty figure if no location is clicked
 
     # Get the clicked location's worksheet from customdata
     worksheet = click_data['points'][0]['customdata']
 
-    # Filter the data for the clicked location's worksheet
-    filtered_data = data[data['Sheet'] == worksheet]
+    # Filter the data for the clicked location's worksheet and selected year
+    filtered_data = data[(data['Sheet'] == worksheet) & (data['Year'] == selected_year)]
 
     # Prepare the data for the donut chart (Threat Type and Threat Score)
     threat_data = filtered_data[['Overall Threat Score', 'Threat Type', 'Threat', 'Threat Score']].groupby(['Overall Threat Score', 'Threat Type', 'Threat']).sum().reset_index()
@@ -235,23 +278,24 @@ def update_donut_chart(click_data):
             'yanchor': 'top'
         },
         margin=dict(t=30, l=10, r=10, b=10)  # Adjust margins if needed
-)
+    )
 
     return fig
 
 @app.callback(
     Output("value-donut-chart", "figure"),
-    Input("map", "clickData")
+    [Input("map", "clickData"),
+     Input('year-slider', 'value')]
 )
-def update_value_donut_chart(click_data):
+def update_value_donut_chart(click_data, selected_year):
     if not click_data:
         return go.Figure()  # Return an empty figure if no location is clicked
 
     # Get the clicked location's worksheet from customdata
     worksheet = click_data['points'][0]['customdata']
 
-    # Filter the data for the clicked location's worksheet
-    filtered_data = data[data['Sheet'] == worksheet]
+    # Filter the data for the clicked location's worksheet and selected year
+    filtered_data = data[(data['Sheet'] == worksheet) & (data['Year'] == selected_year)]
 
     # Prepare the data for the second donut chart (Overall Value Score, Value Type, and Value Score)
     value_data = filtered_data[['Overall Value Score', 'Value Type', 'Value', 'Value Score']].groupby(['Overall Value Score', 'Value Type', 'Value']).sum().reset_index()
@@ -310,5 +354,5 @@ def update_value_donut_chart(click_data):
     
     return fig
     
-if __name__ == '__main__':
+if __name__ == '__main__': 
     app.run_server(debug=False)
