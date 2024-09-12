@@ -1,6 +1,6 @@
 dash
 pandas
-plotly
+plotly==5.23.0
 gunicorn
 openpyxl
 dash-bootstrap-components

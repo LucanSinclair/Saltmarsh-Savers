@@ -12,9 +12,9 @@ data_dir = os.path.join(os.path.dirname(__file__), 'data')
 # Image mapping for displaying images based on clicked labels
 image_mapping = {
     'Altered Hydrology (Tidal)': '/assets/Altered Hydrology (Tidal).png',
-    'Threat 2': '/assets/threat2.png',
-    'Value 1': '/assets/value1.png',
-    'Value 2': '/assets/value2.png',
+    #'Threat 2': '/assets/threat2.png',
+    #'Value 1': '/assets/value1.png',
+    #'Value 2': '/assets/value2.png',
     # Add more mappings as needed
 }
 
@@ -348,7 +348,7 @@ def update_image(click_data):
         if image_path:
             return image_path, {'width': '300px', 'height': '300px', 'display': 'block'}
     return '', {'width': '300px', 'height': '300px', 'display': 'none'}
-
+    
 @app.callback(
     Output("value-donut-chart", "figure"),
     [Input("map", "clickData"),
