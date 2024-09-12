@@ -2,10 +2,21 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-from dash import Dash, dcc, html, Input, Output
+import dash_bootstrap_components as dbc
+from dash import Dash, dcc, html, Input, Output, State, callback_context
+
 
 # Define the path to the directory containing the Excel files
 data_dir = os.path.join(os.path.dirname(__file__), 'data')
+
+# Image mapping for displaying images based on clicked labels
+image_mapping = {
+    'Altered Hydrology (Tidal)': '/assets/Altered Hydrology (Tidal).png',
+    'Threat 2': '/assets/threat2.png',
+    'Value 1': '/assets/value1.png',
+    'Value 2': '/assets/value2.png',
+    # Add more mappings as needed
+}
 
 # Load the Excel data from multiple files and add a column to identify the year
 years = [2023, 2024]  # Add more years as needed
@@ -40,7 +51,7 @@ def calculate_zoom(min_lat, max_lat, min_lon, max_lon):
 zoom_level = calculate_zoom(min_lat, max_lat, min_lon, max_lon)
 
 # Initialize the Dash app
-app = Dash(__name__)
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Define the layout of the app
 app.layout = html.Div([
@@ -80,27 +91,42 @@ app.layout = html.Div([
         'left': '0',
         'zIndex': '1000',  # Ensure the header is on top
     }),
+
+    
+    
+
+html.Div([
     html.Div([
-        html.Div([
-            dcc.Graph(id='map', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
-        ], style={'width': '50%', 'height': '500px', 'minHeight': '500px', 'margin': 'auto'}),
-        html.Div([
-            dcc.Graph(id='donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
-        ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'}),
-        html.Div([
-            dcc.Graph(id='value-donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'})
-        ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'})
-    ], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'center', 'marginTop': '80px', 'height': '500px', 'flexShrink': '0', 'marginBottom': '25px'}),
+        dcc.Graph(id='map', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
+    ], style={'width': '50%', 'height': '500px', 'minHeight': '500px', 'margin': 'auto'}),
     html.Div([
-        dcc.Slider(
-            id='year-slider',
-            min=min(years),
-            max=max(years),
-            value=max(years),
-            marks={str(year): {'label': str(year), 'style': {'font-size': '14px', 'font-family': 'Arial, sans-serif'}} for year in years},
-            step=None
+        dcc.Graph(id='donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
+    ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'}),
+    html.Div([
+        dcc.Graph(id='value-donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'})
+    ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'}),
+    dbc.Modal([
+        dbc.ModalBody([
+            html.Img(id="modal-image", style={'width': '100%'})
+        ]),
+        dbc.ModalFooter(
+            dbc.Button("Close", id="close", className="ml-auto")
         )
-    ], style={'width': '50%', 'margin': 'auto'}),
+    ], id="modal", is_open=False),
+
+    dcc.Store(id='stored-click-data')
+
+], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'center', 'marginTop': '80px', 'height': '500px', 'flexShrink': '0', 'marginBottom': '25px'}),
+html.Div([
+    dcc.Slider(
+        id='year-slider',
+        min=min(years),
+        max=max(years),
+        value=max(years),
+        marks={str(year): {'label': str(year), 'style': {'font-size': '14px', 'font-family': 'Arial, sans-serif'}} for year in years},
+        step=None
+    )
+], style={'width': '50%', 'margin': 'auto'}),
     html.Footer([
         html.P("", style={
             'color': 'white',
@@ -119,6 +145,7 @@ app.layout = html.Div([
             'cursor': 'pointer',
             'marginTop': '10px'
         })
+        
     ], style={
         'backgroundColor': '#34657f',  
         'textAlign': 'center',
@@ -132,11 +159,40 @@ app.layout = html.Div([
         'display': 'flex',
         'justifyContent': 'center',
         'alignItems': 'center'
-    })
+    }),
 ])
 
-print("Layout defined")
 server = app.server
+
+@app.callback(
+    Output("modal", "is_open"),
+    Output("modal-image", "src"),
+    Output("stored-click-data", "data"),
+    [Input("donut-chart", "clickData"), Input("close", "n_clicks")],
+    [State("modal", "is_open"), State("stored-click-data", "data")]
+)
+def toggle_modal(click_data, close_clicks, is_open, stored_click_data):
+    ctx = callback_context
+    print("stored_click_data:", stored_click_data)
+    
+    if is_open is None:
+        is_open = False
+
+    if ctx.triggered:
+        prop_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        print("Triggered by:", prop_id)
+        
+        if prop_id == 'close':
+            return False, '', None
+        elif prop_id == 'donut-chart' and click_data:
+            clicked_label = click_data['points'][0]['label']
+            print("Clicked label:", clicked_label)
+            image_path = image_mapping.get(clicked_label, '')
+            print("Image path:", image_path)
+            if image_path and (stored_click_data is None or click_data['points'][0]['pointNumber'] != stored_click_data['points'][0]['pointNumber']):
+                return True, image_path, click_data
+
+    return is_open, '', stored_click_data
 
 @app.callback(
     [Output("map", "figure"),
@@ -150,13 +206,10 @@ def update_map(click_data, selected_year):
     # Filter the data based on the selected year
     filtered_data = data[data['Year'] == selected_year]
     
-    print(f"Selected Year: {selected_year}")
-    print(f"Filtered Data:\n{filtered_data.head()}")
-
     color_mapping = [
-        (lambda x: x < 2.0, 'green'),
+        (lambda x: x < 2.0, 'red'),
         (lambda x: 2.0 <= x < 3.0, 'orange'),
-        (lambda x: x >= 3.0, 'red')
+        (lambda x: x >= 3.0, 'green')
     ]
 
     def get_color_for_value(value):
@@ -165,8 +218,8 @@ def update_map(click_data, selected_year):
                 return color
         return 'grey'  # Default color if no condition matches
     
-    filtered_data['Color'] = filtered_data['TVR'].apply(get_color_for_value)
-
+    filtered_data = data[data['Year'] == selected_year].copy()
+    filtered_data.loc[:, 'Color'] = filtered_data['TVR'].apply(get_color_for_value)
     # Create a map using Plotly Graph Objects with clustering enabled
     fig = go.Figure(go.Scattermapbox(
         lat=filtered_data['Latitude'],
@@ -238,15 +291,15 @@ def update_donut_chart(click_data, selected_year):
 
     # Create parents for each level
     overall_threat_parents = [''] * len(overall_threat_labels)
-    threat_parents = [threat_data.loc[threat_data['Threat Type'] == threat, 'Overall Threat Score'].values[0] for threat in threat_labels]
+    threat_parents = [threat_data.loc[threat_data['Threat Type'] == threat, 'Overall Threat Score'].iloc[0] for threat in threat_labels]
     data_parents = threat_data['Threat Type'].tolist()
 
     # Combine all parents
     parents = overall_threat_parents + threat_parents + data_parents
 
     # Set values for each level
-    overall_threat_values = [threat_data[threat_data['Overall Threat Score'] == cat]['Threat Score'].sum() for cat in overall_threat_labels]
-    threat_values = [threat_data[threat_data['Threat Type'] == threat]['Threat Score'].sum() for threat in threat_labels]
+    overall_threat_values = [threat_data.loc[threat_data['Overall Threat Score'] == cat, 'Threat Score'].sum() for cat in overall_threat_labels]
+    threat_values = [threat_data.loc[threat_data['Threat Type'] == threat, 'Threat Score'].sum() for threat in threat_labels]
     values = overall_threat_values + threat_values + data_scores
 
     # Create inside text for each level
@@ -283,6 +336,20 @@ def update_donut_chart(click_data, selected_year):
     return fig
 
 @app.callback(
+    Output('image', 'src'),
+    Output('image', 'style'),
+    Input('donut-chart', 'clickData')
+)
+def update_image(click_data):
+    if click_data:
+        clicked_label = click_data['points'][0]['label']
+        print (clicked_label)
+        image_path = image_mapping.get(clicked_label, '')
+        if image_path:
+            return image_path, {'width': '300px', 'height': '300px', 'display': 'block'}
+    return '', {'width': '300px', 'height': '300px', 'display': 'none'}
+
+@app.callback(
     Output("value-donut-chart", "figure"),
     [Input("map", "clickData"),
      Input('year-slider', 'value')]
@@ -297,8 +364,25 @@ def update_value_donut_chart(click_data, selected_year):
     # Filter the data for the clicked location's worksheet and selected year
     filtered_data = data[(data['Sheet'] == worksheet) & (data['Year'] == selected_year)]
 
+    # Debug print the filtered data
+    print("Filtered Data:")
+    print(filtered_data)
+
     # Prepare the data for the second donut chart (Overall Value Score, Value Type, and Value Score)
     value_data = filtered_data[['Overall Value Score', 'Value Type', 'Value', 'Value Score']].groupby(['Overall Value Score', 'Value Type', 'Value']).sum().reset_index()
+
+    # Debug print the grouped data
+    print("Grouped Value Data:")
+    print(value_data)
+
+    # Debug print the specific data for Fish Habitat
+    fish_habitat_data = value_data[value_data['Value Type'] == 'Fish Habitat']
+    print("Fish Habitat Data:")
+    print(fish_habitat_data)
+
+    # Debug print the sum for Fish Habitat
+    fish_habitat_sum = fish_habitat_data['Value Score'].sum()
+    print("Fish Habitat Sum:", fish_habitat_sum)
 
     # Create a list of labels, parents, and values for the sunburst chart
     overall_value_labels = value_data['Overall Value Score'].unique().tolist()
@@ -306,24 +390,42 @@ def update_value_donut_chart(click_data, selected_year):
     value_labels = value_data['Value'].tolist()
     value_scores = value_data['Value Score'].tolist()
 
+    # Debug print the lists
+    print("Overall Value Labels:", overall_value_labels)
+    print("Value Type Labels:", value_type_labels)
+    print("Value Labels:", value_labels)
+    print("Value Scores:", value_scores)
+
     # Create labels for overall value score, value types, and values
     labels = overall_value_labels + value_type_labels + value_labels
 
     # Create parents for each level
     overall_value_parents = [''] * len(overall_value_labels)
-    value_type_parents = [value_data.loc[value_data['Value Type'] == value_type, 'Overall Value Score'].values[0] for value_type in value_type_labels]
+    value_type_parents = [value_data.loc[value_data['Value Type'] == value_type, 'Overall Value Score'].iloc[0] for value_type in value_type_labels]
     value_parents = value_data['Value Type'].tolist()
 
     # Combine all parents
     parents = overall_value_parents + value_type_parents + value_parents
 
     # Set values for each level
-    overall_value_values = [value_data[value_data['Overall Value Score'] == cat]['Value Score'].sum() for cat in overall_value_labels]
-    value_type_values = [value_data[value_data['Value Type'] == value_type]['Value Score'].sum() for value_type in value_type_labels]
+    overall_value_values = [value_data.loc[value_data['Overall Value Score'] == cat, 'Value Score'].sum() for cat in overall_value_labels]
+    value_type_values = [value_data.loc[value_data['Value Type'] == value_type, 'Value Score'].sum() for value_type in value_type_labels]
     values = overall_value_values + value_type_values + value_scores
 
+    print("Labels:", labels)
+    print("Parents:", parents)
+    print("Length of Labels:", len(labels))
+    print("Length of Parents:", len(parents))
+    print("Overall Value Values:", overall_value_values)
+
+    # Debug print the values
+    print("Overall Value Values:", overall_value_values)
+    print("Value Type Values:", value_type_values)
+    print("Values:", values)
+
     # Create inside text for each level
-    inside_text =[""] + [f"{value:.1f}" for value in overall_value_values] + [f"{value:.1f}" for value in value_type_values] + [f"{value:.1f}" for value in value_scores]
+    inside_text =[""] + [f"{value:.1f}" for value in value_type_values] + [f"{value:.1f}" for value in value_scores]
+    print("Inside Text:", inside_text)
 
     # Create a sunburst chart using Plotly Graph Objects
     fig = go.Figure()
