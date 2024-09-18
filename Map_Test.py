@@ -168,31 +168,40 @@ server = app.server
     Output("modal", "is_open"),
     Output("modal-image", "src"),
     Output("stored-click-data", "data"),
-    [Input("donut-chart", "clickData"), Input("close", "n_clicks")],
+    [Input("donut-chart", "clickData"), Input("value-donut-chart", "clickDataValues")],
     [State("modal", "is_open"), State("stored-click-data", "data")]
 )
-def toggle_modal(click_data, close_clicks, is_open, stored_click_data):
+def toggle_modal(click_data_threats, click_data_values, is_open, stored_click_data):
     ctx = callback_context
-    print("stored_click_data:", stored_click_data)
-    
-    if is_open is None:
-        is_open = False
 
     if ctx.triggered:
         prop_id = ctx.triggered[0]['prop_id'].split('.')[0]
         print("Triggered by:", prop_id)
         
-        if prop_id == 'close':
-            return False, '', None
-        elif prop_id == 'donut-chart' and click_data:
-            clicked_label = click_data['points'][0]['label']
+        if prop_id in ['donut-chart', 'value-donut-chart'] and (click_data_threats or click_data_values):
+            if prop_id == 'donut-chart':
+                clicked_data = click_data_threats
+            elif prop_id == 'value-donut-chart':
+                clicked_data = click_data_values
+
+            clicked_label = clicked_data['points'][0]['label']
             print("Clicked label:", clicked_label)
             image_path = image_mapping.get(clicked_label, '')
             print("Image path:", image_path)
-            if image_path and (stored_click_data is None or click_data['points'][0]['pointNumber'] != stored_click_data['points'][0]['pointNumber']):
-                return True, image_path, click_data
+            if image_path:
+                return True, image_path, clicked_data
 
     return is_open, '', stored_click_data
+
+@app.callback(
+    [Output('donut-chart', 'clickData'), Output('value-donut-chart', 'clickData')],
+    [Input('modal', 'is_open')]
+)
+def reset_click_data(is_open):
+    if not is_open:
+        # If the modal is not open, reset the clickData
+        return None, None
+    raise dash.exceptions.PreventUpdate
 
 @app.callback(
     [Output("map", "figure"),
@@ -364,25 +373,9 @@ def update_value_donut_chart(click_data, selected_year):
     # Filter the data for the clicked location's worksheet and selected year
     filtered_data = data[(data['Sheet'] == worksheet) & (data['Year'] == selected_year)]
 
-    # Debug print the filtered data
-    print("Filtered Data:")
-    print(filtered_data)
-
     # Prepare the data for the second donut chart (Overall Value Score, Value Type, and Value Score)
     value_data = filtered_data[['Overall Value Score', 'Value Type', 'Value', 'Value Score']].groupby(['Overall Value Score', 'Value Type', 'Value']).sum().reset_index()
 
-    # Debug print the grouped data
-    print("Grouped Value Data:")
-    print(value_data)
-
-    # Debug print the specific data for Fish Habitat
-    fish_habitat_data = value_data[value_data['Value Type'] == 'Fish Habitat']
-    print("Fish Habitat Data:")
-    print(fish_habitat_data)
-
-    # Debug print the sum for Fish Habitat
-    fish_habitat_sum = fish_habitat_data['Value Score'].sum()
-    print("Fish Habitat Sum:", fish_habitat_sum)
 
     # Create a list of labels, parents, and values for the sunburst chart
     overall_value_labels = value_data['Overall Value Score'].unique().tolist()
@@ -390,11 +383,6 @@ def update_value_donut_chart(click_data, selected_year):
     value_labels = value_data['Value'].tolist()
     value_scores = value_data['Value Score'].tolist()
 
-    # Debug print the lists
-    print("Overall Value Labels:", overall_value_labels)
-    print("Value Type Labels:", value_type_labels)
-    print("Value Labels:", value_labels)
-    print("Value Scores:", value_scores)
 
     # Create labels for overall value score, value types, and values
     labels = overall_value_labels + value_type_labels + value_labels
@@ -412,16 +400,6 @@ def update_value_donut_chart(click_data, selected_year):
     value_type_values = [value_data.loc[value_data['Value Type'] == value_type, 'Value Score'].sum() for value_type in value_type_labels]
     values = overall_value_values + value_type_values + value_scores
 
-    print("Labels:", labels)
-    print("Parents:", parents)
-    print("Length of Labels:", len(labels))
-    print("Length of Parents:", len(parents))
-    print("Overall Value Values:", overall_value_values)
-
-    # Debug print the values
-    print("Overall Value Values:", overall_value_values)
-    print("Value Type Values:", value_type_values)
-    print("Values:", values)
 
     # Create inside text for each level
     inside_text =[""] + [f"{value:.1f}" for value in value_type_values] + [f"{value:.1f}" for value in value_scores]
