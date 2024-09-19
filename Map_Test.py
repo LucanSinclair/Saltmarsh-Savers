@@ -19,7 +19,7 @@ image_mapping = {
 }
 
 # Load the Excel data from multiple files and add a column to identify the year
-years = [2023, 2024]  # Add more years as needed
+years = [2021, 2022, 2023, 2024]  # Add more years as needed
 data_frames = []
 for year in years:
     file_path = os.path.join(data_dir, f'data_{year}.xlsx')
