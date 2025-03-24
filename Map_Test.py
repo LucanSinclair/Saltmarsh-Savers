@@ -334,7 +334,7 @@ def update_donut_chart(click_data, selected_year):
     fig.update_layout(
         title={
             'text': "Threats",
-            'y': 0.82,  # Adjust this value to move the title closer to the donut graph
+            'y': 1.0,  # Adjust this value to move the title closer to the donut graph
             'x': 0.5,  # Center the title horizontally
             'xanchor': 'center',
             'yanchor': 'top'
@@ -424,7 +424,7 @@ def update_value_donut_chart(click_data, selected_year):
     fig.update_layout(
         title={
             'text': "Values",
-            'y': 0.82,  # Adjust this value to move the title closer to the donut graph
+            'y': 1.0,  # Adjust this value to move the title closer to the donut graph
             'x': 0.5,  # Center the title horizontally
             'xanchor': 'center',
             'yanchor': 'top'

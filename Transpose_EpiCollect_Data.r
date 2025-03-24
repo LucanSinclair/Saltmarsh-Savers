@@ -7,7 +7,7 @@
 library(data.table)
 
 # Read the CSV file
-data <- fread("C:\\Users\\LucanSinclair\\OneDrive - Earthwatch\\Desktop\\Saltmarsh Savers\\form-1__super-saltmarsh-savers.csv")
+data <- fread("D:\\Saltmarsh Savers\\form-1__super-saltmarsh-savers.csv")
 
 # Define a vector of column names to remove
 columns_to_remove <- c("ec5_uuid", "created_at", "uploaded_at", "title", 
@@ -66,5 +66,5 @@ rownames(transposed_data_df) <- new_row_names
 transposed_data_df <- cbind(Original_Column_Names = rownames(transposed_data_df), transposed_data_df)
 
 # Save the transposed data as a new file
-new_file_name <- "C:\\Users\\LucanSinclair\\OneDrive - Earthwatch\\Desktop\\Saltmarsh Savers\\form-1__super-saltmarsh-savers_transposed.csv"
+new_file_name <- "D:\\Saltmarsh Savers\\form-1__super-saltmarsh-savers_transposed.csv"
 write.csv(transposed_data_df, file = new_file_name, row.names = FALSE)
