@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import os
 import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html, Input, Output, State, callback_context
+from dash.exceptions import PreventUpdate
 
 
 # Define the path to the directory containing the Excel files
@@ -30,11 +31,19 @@ for year in years:
 data = pd.concat(data_frames, ignore_index=True)
 print(f"Data Loaded:\n{data.head()}")
 
+# Convert empty strings to NaN in Latitude and Longitude columns
+data['Latitude'] = pd.to_numeric(data['Latitude'], errors='coerce')
+data['Longitude'] = pd.to_numeric(data['Longitude'], errors='coerce')
+
+# Filter out rows with missing latitude/longitude values for map calculations
+map_data = data.dropna(subset=['Latitude', 'Longitude'])
+print(f"Map data points (after removing NaN): {len(map_data)}")
+
 # Calculate the bounding box of the data points
-min_lat = data['Latitude'].min()
-max_lat = data['Latitude'].max()
-min_lon = data['Longitude'].min()
-max_lon = data['Longitude'].max()
+min_lat = map_data['Latitude'].min()
+max_lat = map_data['Latitude'].max()
+min_lon = map_data['Longitude'].min()
+max_lon = map_data['Longitude'].max()
 
 # Calculate the center of the map based on the bounding box
 center_lat = (min_lat + max_lat) / 2
@@ -98,13 +107,13 @@ app.layout = html.Div([
 html.Div([
     html.Div([
         dcc.Graph(id='map', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
-    ], style={'width': '50%', 'height': '500px', 'minHeight': '500px', 'margin': 'auto'}),
+    ], style={'width': '50%', 'height': '600px', 'minHeight': '600px', 'margin': '0', 'padding': '5px', 'overflow': 'hidden'}),
     html.Div([
         dcc.Graph(id='donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'}),
-    ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'}),
+    ], style={'width': '25%', 'height': '600px', 'margin': '0', 'padding': '2px', 'boxSizing': 'border-box', 'overflow': 'hidden'}),
     html.Div([
         dcc.Graph(id='value-donut-chart', style={'width': '100%', 'height': '100%', 'margin': '0', 'padding': '0'})
-    ], style={'width': '25%', 'height': '500px', 'display': 'flex', 'flexDirection': 'column', 'justifyContent': 'center', 'alignItems': 'center', 'flexShrink': '0'}),
+    ], style={'width': '25%', 'height': '600px', 'margin': '0', 'padding': '2px', 'boxSizing': 'border-box', 'overflow': 'hidden'}),
     dbc.Modal([
         dbc.ModalBody([
             html.Img(id="modal-image", style={'width': '100%'})
@@ -116,7 +125,7 @@ html.Div([
 
     dcc.Store(id='stored-click-data')
 
-], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'center', 'marginTop': '80px', 'height': '500px', 'flexShrink': '0', 'marginBottom': '25px'}),
+], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'center', 'marginTop': '80px', 'height': '600px', 'flexShrink': '0', 'marginBottom': '25px'}),
 html.Div([
     dcc.Slider(
         id='year-slider',
@@ -201,7 +210,7 @@ def reset_click_data(is_open):
     if not is_open:
         # If the modal is not open, reset the clickData
         return None, None
-    raise dash.exceptions.PreventUpdate
+    raise PreventUpdate
 
 @app.callback(
     [Output("map", "figure"),
@@ -230,11 +239,11 @@ def update_map(click_data, selected_year):
     filtered_data = data[data['Year'] == selected_year].copy()
     filtered_data.loc[:, 'Color'] = filtered_data['TVR'].apply(get_color_for_value)
     # Create a map using Plotly Graph Objects with clustering enabled
-    fig = go.Figure(go.Scattermapbox(
+    fig = go.Figure(go.Scattermap(
         lat=filtered_data['Latitude'],
         lon=filtered_data['Longitude'],
         mode='markers',
-        marker=go.scattermapbox.Marker(
+        marker=go.scattermap.Marker(
             size=14,
             color=filtered_data['Color'],
             opacity=0.7
@@ -257,7 +266,7 @@ def update_map(click_data, selected_year):
     ))
    
     fig.update_layout(
-        mapbox=dict(
+        map=dict(
             style="open-street-map",
             zoom=zoom_level,
             center=dict(lat=center_lat, lon=center_lon)  # Center the map based on data points
@@ -334,12 +343,17 @@ def update_donut_chart(click_data, selected_year):
     fig.update_layout(
         title={
             'text': "Threats",
-            'y': 1.0,  # Adjust this value to move the title closer to the donut graph
+            'y': 0.98,  # Move title to very top
             'x': 0.5,  # Center the title horizontally
             'xanchor': 'center',
-            'yanchor': 'top'
+            'yanchor': 'top',
+            'font': {'size': 16}  # Smaller title font
         },
-        margin=dict(t=30, l=10, r=10, b=10)  # Adjust margins if needed
+        margin=dict(t=30, l=5, r=5, b=5),  # Minimal margins
+        height=580,  # Use more of available height
+        showlegend=False,  # Remove legend to save space
+        paper_bgcolor='rgba(0,0,0,0)',  # Transparent background
+        plot_bgcolor='rgba(0,0,0,0)'   # Transparent plot area
     )
 
     return fig
@@ -424,12 +438,17 @@ def update_value_donut_chart(click_data, selected_year):
     fig.update_layout(
         title={
             'text': "Values",
-            'y': 1.0,  # Adjust this value to move the title closer to the donut graph
+            'y': 0.98,  # Move title to very top
             'x': 0.5,  # Center the title horizontally
             'xanchor': 'center',
-            'yanchor': 'top'
+            'yanchor': 'top',
+            'font': {'size': 16}  # Smaller title font
         },
-        margin=dict(t=30, l=10, r=10, b=0),  # Adjust margins if needed
+        margin=dict(t=30, l=5, r=5, b=5),  # Minimal margins
+        height=580,  # Use more of available height
+        showlegend=False,  # Remove legend to save space
+        paper_bgcolor='rgba(0,0,0,0)',  # Transparent background
+        plot_bgcolor='rgba(0,0,0,0)'   # Transparent plot area
     )
     
     return fig
