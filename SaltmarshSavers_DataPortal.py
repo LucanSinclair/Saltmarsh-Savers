@@ -591,20 +591,6 @@ def update_donut_chart(click_data, selected_year):
     return fig
 
 @app.callback(
-    Output('image', 'src'),
-    Output('image', 'style'),
-    Input('donut-chart', 'clickData')
-)
-def update_image(click_data):
-    if click_data:
-        clicked_label = click_data['points'][0]['label']
-        print (clicked_label)
-        image_path = image_mapping.get(clicked_label, '')
-        if image_path:
-            return image_path, {'width': '300px', 'height': '300px', 'display': 'block'}
-    return '', {'width': '300px', 'height': '300px', 'display': 'none'}
-    
-@app.callback(
     Output("value-donut-chart", "figure"),
     [Input("map", "clickData"),
      Input('year-slider', 'value')]
