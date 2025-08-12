@@ -6,9 +6,16 @@ import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html, Input, Output, State, callback_context
 from dash.exceptions import PreventUpdate
 
+print("All imports successful")  # DEBUG
 
 # Define the path to the directory containing the Excel files
 data_dir = os.path.join(os.path.dirname(__file__), 'data')
+
+# ADD THESE DEBUG PRINTS:
+print(f"Current working directory: {os.getcwd()}")
+print(f"Script location: {os.path.dirname(__file__)}")
+print(f"Data directory: {data_dir}")
+print(f"Data directory exists: {os.path.exists(data_dir)}")
 
 # Image mapping for displaying images based on clicked labels
 image_mapping = {
@@ -19,17 +26,37 @@ image_mapping = {
     # Add more mappings as needed
 }
 
-# Load the Excel data from multiple files and add a column to identify the year
+# MOVED THIS LINE UP - Define years BEFORE using it
 years = [2021, 2022, 2023, 2024]  # Add more years as needed
+print(f"Years defined: {years}")  # DEBUG
+
+# Load the Excel data from multiple files and add a column to identify the year
 data_frames = []
 for year in years:
     file_path = os.path.join(data_dir, f'data_{year}.xlsx')
-    sheet_names = pd.ExcelFile(file_path).sheet_names
-    for sheet in sheet_names:
-        df = pd.read_excel(file_path, sheet_name=sheet).assign(Year=year, Sheet=sheet)
-        data_frames.append(df)
-data = pd.concat(data_frames, ignore_index=True)
-print(f"Data Loaded:\n{data.head()}")
+    print(f"Looking for file: {file_path}")  # DEBUG
+    print(f"File exists: {os.path.exists(file_path)}")  # DEBUG
+    
+    if not os.path.exists(file_path):
+        print(f"WARNING: File not found: {file_path}")
+        continue
+        
+    try:
+        sheet_names = pd.ExcelFile(file_path).sheet_names
+        for sheet in sheet_names:
+            df = pd.read_excel(file_path, sheet_name=sheet).assign(Year=year, Sheet=sheet)
+            data_frames.append(df)
+    except Exception as e:
+        print(f"ERROR reading {file_path}: {e}")
+        continue
+
+if not data_frames:
+    print("ERROR: No data files were loaded!")
+    # Create empty dataframe with required columns to prevent crashes
+    data = pd.DataFrame(columns=['Location', 'Latitude', 'Longitude', 'Year', 'Sheet', 'TVR', 'Threat Score', 'Value Score'])
+else:
+    data = pd.concat(data_frames, ignore_index=True)
+    print(f"Data Loaded:\n{data.head()}")
 
 # Convert empty strings to NaN in Latitude and Longitude columns
 data['Latitude'] = pd.to_numeric(data['Latitude'], errors='coerce')
@@ -39,15 +66,23 @@ data['Longitude'] = pd.to_numeric(data['Longitude'], errors='coerce')
 map_data = data.dropna(subset=['Latitude', 'Longitude'])
 print(f"Map data points (after removing NaN): {len(map_data)}")
 
-# Calculate the bounding box of the data points
-min_lat = map_data['Latitude'].min()
-max_lat = map_data['Latitude'].max()
-min_lon = map_data['Longitude'].min()
-max_lon = map_data['Longitude'].max()
-
-# Calculate the center of the map based on the bounding box
-center_lat = (min_lat + max_lat) / 2
-center_lon = (min_lon + max_lon) / 2
+# Calculate the bounding box of the data points - with fallback for empty data
+if len(map_data) > 0:
+    min_lat = map_data['Latitude'].min()
+    max_lat = map_data['Latitude'].max()
+    min_lon = map_data['Longitude'].min()
+    max_lon = map_data['Longitude'].max()
+    
+    # Calculate the center of the map based on the bounding box
+    center_lat = (min_lat + max_lat) / 2
+    center_lon = (min_lon + max_lon) / 2
+else:
+    # Default to Australia coordinates if no data
+    min_lat, max_lat = -45.0, -10.0
+    min_lon, max_lon = 110.0, 155.0
+    center_lat = -25.0
+    center_lon = 135.0
+    print("No map data found - using default Australia coordinates")
 
 # Calculate the zoom level based on the bounding box
 def calculate_zoom(min_lat, max_lat, min_lon, max_lon):
@@ -290,9 +325,9 @@ app.layout = html.Div([
         html.Div([
             dcc.Slider(
                 id='year-slider',
-                min=min(years),
-                max=max(years),
-                value=max(years),
+                min=min(years) if years else 2021,
+                max=max(years) if years else 2024,
+                value=max(years) if years else 2024,
                 marks={str(year): {'label': str(year), 'style': {'font-size': '14px', 'font-family': 'Inter, sans-serif'}} for year in years},
                 step=None
             )
@@ -401,11 +436,18 @@ def reset_click_data(is_open):
 )
 def update_map_and_stats(click_data, selected_year):
     print("update_map_and_stats function called")
+    
+    if data.empty:
+        # Return empty/default values if no data loaded
+        empty_fig = go.Figure()
+        return empty_fig, {'display': 'none'}, {'display': 'none'}, "0", "0", "0.0", "0.0"
+    
     # Filter the data based on the selected year
     filtered_data = data[data['Year'] == selected_year]
     
-    # Calculate stats
-    total_sites = len(filtered_data['Location'].unique()) if not filtered_data.empty else 0
+    # Calculate stats - only count locations that have valid coordinates (appear on map)
+    filtered_map_data = filtered_data.dropna(subset=['Latitude', 'Longitude'])
+    total_sites = len(filtered_map_data['Location'].unique()) if not filtered_map_data.empty else 0
     years_range = len(data['Year'].unique())
     avg_threat = filtered_data['Threat Score'].mean() if not filtered_data.empty else 0
     avg_value = filtered_data['Value Score'].mean() if not filtered_data.empty else 0
@@ -423,31 +465,35 @@ def update_map_and_stats(click_data, selected_year):
         return 'grey'  # Default color if no condition matches
     
     filtered_data = data[data['Year'] == selected_year].copy()
-    filtered_data.loc[:, 'Color'] = filtered_data['TVR'].apply(get_color_for_value)
+    if not filtered_data.empty and 'TVR' in filtered_data.columns:
+        filtered_data.loc[:, 'Color'] = filtered_data['TVR'].apply(get_color_for_value)
+    else:
+        filtered_data.loc[:, 'Color'] = 'grey'
+        
     # Create a map using Plotly Graph Objects with clustering enabled
     fig = go.Figure(go.Scattermap(
-        lat=filtered_data['Latitude'],
-        lon=filtered_data['Longitude'],
+        lat=filtered_data['Latitude'] if not filtered_data.empty else [],
+        lon=filtered_data['Longitude'] if not filtered_data.empty else [],
         mode='markers',
         marker=go.scattermap.Marker(
             size=14,
-            color=filtered_data['Color'],
+            color=filtered_data['Color'] if not filtered_data.empty else [],
             opacity=0.7
         ),
-        text=filtered_data['Location'],
+        text=filtered_data['Location'] if not filtered_data.empty else [],
         hoverinfo='text',
-        customdata=filtered_data['Sheet'],  # Add custom data for each point
+        customdata=filtered_data['Sheet'] if not filtered_data.empty else [],
          hoverlabel=dict(
-            bgcolor='#02964a',  # Set the background color of the hover text
+            bgcolor='#02964a',
             font=dict(
-                color='white'  # Set the color of the hover text
+                color='white'
             )
         ),
         cluster=dict(
             enabled=True,
             maxzoom=10,
             step=50,
-            color='#0a77a9'  # Set the color of the cluster dots
+            color='#0a77a9'
         )
     ))
    
@@ -455,7 +501,7 @@ def update_map_and_stats(click_data, selected_year):
         map=dict(
             style="open-street-map",
             zoom=zoom_level,
-            center=dict(lat=center_lat, lon=center_lon)  # Center the map based on data points
+            center=dict(lat=center_lat, lon=center_lon)
         ),
         uirevision='constant',
         height=600
