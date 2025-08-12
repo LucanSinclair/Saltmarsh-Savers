@@ -2,20 +2,50 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import sys
 import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html, Input, Output, State, callback_context
 from dash.exceptions import PreventUpdate
 
 print("All imports successful")  # DEBUG
 
+# More robust path handling for deployment
+def get_data_directory():
+    """Get the data directory path that works both locally and on Render"""
+    # Try multiple approaches to find the data directory
+    possible_paths = [
+        os.path.join(os.getcwd(), 'data'),  # Current working directory
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data'),  # Script directory
+        '/opt/render/project/src/data',  # Common Render path
+        'data'  # Relative path
+    ]
+    
+    for path in possible_paths:
+        print(f"Checking path: {path}")
+        if os.path.exists(path) and os.path.isdir(path):
+            print(f"Found data directory at: {path}")
+            return path
+    
+    # If no directory found, create one in current directory
+    default_path = os.path.join(os.getcwd(), 'data')
+    print(f"No data directory found, using default: {default_path}")
+    return default_path
+
 # Define the path to the directory containing the Excel files
-data_dir = os.path.join(os.path.dirname(__file__), 'data')
+data_dir = get_data_directory()
 
 # ADD THESE DEBUG PRINTS:
+print(f"Python version: {sys.version}")
 print(f"Current working directory: {os.getcwd()}")
-print(f"Script location: {os.path.dirname(__file__)}")
+print(f"Script location: {os.path.abspath(__file__) if '__file__' in globals() else 'Not available'}")
 print(f"Data directory: {data_dir}")
 print(f"Data directory exists: {os.path.exists(data_dir)}")
+
+# List all files in data directory if it exists
+if os.path.exists(data_dir):
+    print(f"Files in data directory: {os.listdir(data_dir)}")
+else:
+    print("WARNING: Data directory does not exist!")
 
 # Image mapping for displaying images based on clicked labels
 image_mapping = {
@@ -26,12 +56,14 @@ image_mapping = {
     # Add more mappings as needed
 }
 
-# MOVED THIS LINE UP - Define years BEFORE using it
+# Define years BEFORE using it
 years = [2021, 2022, 2023, 2024]  # Add more years as needed
 print(f"Years defined: {years}")  # DEBUG
 
 # Load the Excel data from multiple files and add a column to identify the year
 data_frames = []
+files_loaded = []
+
 for year in years:
     file_path = os.path.join(data_dir, f'data_{year}.xlsx')
     print(f"Looking for file: {file_path}")  # DEBUG
@@ -39,24 +71,82 @@ for year in years:
     
     if not os.path.exists(file_path):
         print(f"WARNING: File not found: {file_path}")
-        continue
+        # Try alternative naming conventions
+        alt_paths = [
+            os.path.join(data_dir, f'data{year}.xlsx'),
+            os.path.join(data_dir, f'{year}.xlsx'),
+            os.path.join(data_dir, f'Data_{year}.xlsx'),
+        ]
+        for alt_path in alt_paths:
+            if os.path.exists(alt_path):
+                file_path = alt_path
+                print(f"Found alternative file: {file_path}")
+                break
+        else:
+            continue
         
     try:
-        sheet_names = pd.ExcelFile(file_path).sheet_names
+        print(f"Attempting to read: {file_path}")
+        excel_file = pd.ExcelFile(file_path)
+        sheet_names = excel_file.sheet_names
+        print(f"Sheet names in {file_path}: {sheet_names}")
+        
         for sheet in sheet_names:
             df = pd.read_excel(file_path, sheet_name=sheet).assign(Year=year, Sheet=sheet)
             data_frames.append(df)
+            print(f"Successfully loaded sheet '{sheet}' from year {year}, shape: {df.shape}")
+        
+        files_loaded.append(year)
     except Exception as e:
         print(f"ERROR reading {file_path}: {e}")
+        import traceback
+        traceback.print_exc()
         continue
+
+print(f"Files successfully loaded for years: {files_loaded}")
 
 if not data_frames:
     print("ERROR: No data files were loaded!")
-    # Create empty dataframe with required columns to prevent crashes
-    data = pd.DataFrame(columns=['Location', 'Latitude', 'Longitude', 'Year', 'Sheet', 'TVR', 'Threat Score', 'Value Score'])
+    print("Creating sample data for demonstration...")
+    # Create sample data to prevent crashes
+    sample_data = {
+        'Location': ['Sample Location 1', 'Sample Location 2'],
+        'Latitude': [-27.5, -28.0],
+        'Longitude': [153.0, 153.5],
+        'Year': [2024, 2024],
+        'Sheet': ['Sheet1', 'Sheet1'],
+        'TVR': [2.5, 3.5],
+        'Threat Score': [2.0, 3.0],
+        'Value Score': [3.0, 4.0],
+        'Overall Threat Score': ['Medium', 'Low'],
+        'Threat Type': ['Type A', 'Type B'],
+        'Threat': ['Threat 1', 'Threat 2'],
+        'Overall Value Score': ['High', 'High'],
+        'Value Type': ['Type X', 'Type Y'],
+        'Value': ['Value 1', 'Value 2']
+    }
+    data = pd.DataFrame(sample_data)
+    print("Sample data created")
 else:
     data = pd.concat(data_frames, ignore_index=True)
-    print(f"Data Loaded:\n{data.head()}")
+    print(f"Data Loaded Successfully!")
+    print(f"Total rows: {len(data)}")
+    print(f"Columns: {data.columns.tolist()}")
+    print(f"First few rows:\n{data.head()}")
+
+# Verify required columns exist
+required_columns = ['Location', 'Latitude', 'Longitude', 'Year', 'Sheet', 'TVR', 'Threat Score', 'Value Score']
+missing_columns = [col for col in required_columns if col not in data.columns]
+if missing_columns:
+    print(f"WARNING: Missing required columns: {missing_columns}")
+    # Add missing columns with default values
+    for col in missing_columns:
+        if col in ['Threat Score', 'Value Score', 'TVR']:
+            data[col] = 0.0
+        elif col in ['Latitude', 'Longitude']:
+            data[col] = None
+        else:
+            data[col] = 'Unknown'
 
 # Convert empty strings to NaN in Latitude and Longitude columns
 data['Latitude'] = pd.to_numeric(data['Latitude'], errors='coerce')
@@ -244,7 +334,7 @@ app.layout = html.Div([
         }, children=[
             html.Img(src='/assets/logo.png', style={
                 'height': '60px'
-            })
+            })  # Removed onerror attribute - not supported in Dash
         ])
     ], style={
         'backgroundColor': '#253746',
@@ -440,6 +530,20 @@ def update_map_and_stats(click_data, selected_year):
     if data.empty:
         # Return empty/default values if no data loaded
         empty_fig = go.Figure()
+        empty_fig.update_layout(
+            title="No data available",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            annotations=[
+                dict(
+                    text="No data files found. Please check data directory.",
+                    xref="paper",
+                    yref="paper",
+                    showarrow=False,
+                    font=dict(size=20)
+                )
+            ]
+        )
         return empty_fig, {'display': 'none'}, {'display': 'none'}, "0", "0", "0.0", "0.0"
     
     # Filter the data based on the selected year
@@ -449,8 +553,8 @@ def update_map_and_stats(click_data, selected_year):
     filtered_map_data = filtered_data.dropna(subset=['Latitude', 'Longitude'])
     total_sites = len(filtered_map_data['Location'].unique()) if not filtered_map_data.empty else 0
     years_range = len(data['Year'].unique())
-    avg_threat = filtered_data['Threat Score'].mean() if not filtered_data.empty else 0
-    avg_value = filtered_data['Value Score'].mean() if not filtered_data.empty else 0
+    avg_threat = filtered_data['Threat Score'].mean() if not filtered_data.empty and 'Threat Score' in filtered_data.columns else 0
+    avg_value = filtered_data['Value Score'].mean() if not filtered_data.empty and 'Value Score' in filtered_data.columns else 0
     
     color_mapping = [
         (lambda x: x < 2.0, 'red'),
@@ -483,7 +587,7 @@ def update_map_and_stats(click_data, selected_year):
         text=filtered_data['Location'] if not filtered_data.empty else [],
         hoverinfo='text',
         customdata=filtered_data['Sheet'] if not filtered_data.empty else [],
-         hoverlabel=dict(
+        hoverlabel=dict(
             bgcolor='#02964a',
             font=dict(
                 color='white'
@@ -527,8 +631,17 @@ def update_donut_chart(click_data, selected_year):
     # Filter the data for the clicked location's worksheet and selected year
     filtered_data = data[(data['Sheet'] == worksheet) & (data['Year'] == selected_year)]
 
+    # Check if required columns exist
+    required_cols = ['Overall Threat Score', 'Threat Type', 'Threat', 'Threat Score']
+    if not all(col in filtered_data.columns for col in required_cols):
+        print(f"Missing required columns for threat chart. Available columns: {filtered_data.columns.tolist()}")
+        return go.Figure()
+
     # Prepare the data for the donut chart (Threat Type and Threat Score)
-    threat_data = filtered_data[['Overall Threat Score', 'Threat Type', 'Threat', 'Threat Score']].groupby(['Overall Threat Score', 'Threat Type', 'Threat']).sum().reset_index()
+    threat_data = filtered_data[required_cols].groupby(['Overall Threat Score', 'Threat Type', 'Threat']).sum().reset_index()
+
+    if threat_data.empty:
+        return go.Figure()
 
     # Create a list of labels, parents, and values for the sunburst chart
     overall_threat_labels = threat_data['Overall Threat Score'].unique().tolist()
@@ -560,17 +673,16 @@ def update_donut_chart(click_data, selected_year):
 
     # Add the sunburst chart (Threat Type and Threat Score)
     fig.add_trace(go.Sunburst(
-    labels=labels,
-    parents=parents,
-    values=values,  # Ensure values are correctly set
-    branchvalues='total',
-    hoverinfo='label',  # Only show the label in the hover information
-    text=inside_text,
-    name='Threat Type',
-    insidetextfont=dict(size=16),  # Set the font size for the inside text
-    outsidetextfont=dict(size=30) 
+        labels=labels,
+        parents=parents,
+        values=values,  # Ensure values are correctly set
+        branchvalues='total',
+        hoverinfo='label',  # Only show the label in the hover information
+        text=inside_text,
+        name='Threat Type',
+        insidetextfont=dict(size=16),  # Set the font size for the inside text
+        outsidetextfont=dict(size=30) 
     ))
-
     
     fig.update_layout(
         title={
@@ -605,16 +717,23 @@ def update_value_donut_chart(click_data, selected_year):
     # Filter the data for the clicked location's worksheet and selected year
     filtered_data = data[(data['Sheet'] == worksheet) & (data['Year'] == selected_year)]
 
-    # Prepare the data for the second donut chart (Overall Value Score, Value Type, and Value Score)
-    value_data = filtered_data[['Overall Value Score', 'Value Type', 'Value', 'Value Score']].groupby(['Overall Value Score', 'Value Type', 'Value']).sum().reset_index()
+    # Check if required columns exist
+    required_cols = ['Overall Value Score', 'Value Type', 'Value', 'Value Score']
+    if not all(col in filtered_data.columns for col in required_cols):
+        print(f"Missing required columns for value chart. Available columns: {filtered_data.columns.tolist()}")
+        return go.Figure()
 
+    # Prepare the data for the second donut chart (Overall Value Score, Value Type, and Value Score)
+    value_data = filtered_data[required_cols].groupby(['Overall Value Score', 'Value Type', 'Value']).sum().reset_index()
+
+    if value_data.empty:
+        return go.Figure()
 
     # Create a list of labels, parents, and values for the sunburst chart
     overall_value_labels = value_data['Overall Value Score'].unique().tolist()
     value_type_labels = value_data['Value Type'].unique().tolist()
     value_labels = value_data['Value'].tolist()
     value_scores = value_data['Value Score'].tolist()
-
 
     # Create labels for overall value score, value types, and values
     labels = overall_value_labels + value_type_labels + value_labels
@@ -631,7 +750,6 @@ def update_value_donut_chart(click_data, selected_year):
     overall_value_values = [value_data.loc[value_data['Overall Value Score'] == cat, 'Value Score'].sum() for cat in overall_value_labels]
     value_type_values = [value_data.loc[value_data['Value Type'] == value_type, 'Value Score'].sum() for value_type in value_type_labels]
     values = overall_value_values + value_type_values + value_scores
-
 
     # Create inside text for each level
     inside_text =[""] + [f"{value:.1f}" for value in value_type_values] + [f"{value:.1f}" for value in value_scores]
@@ -672,4 +790,6 @@ def update_value_donut_chart(click_data, selected_year):
     return fig
     
 if __name__ == '__main__': 
-    app.run_server(debug=False)
+    # Use environment variable for port (Render provides this)
+    port = int(os.environ.get('PORT', 8050))
+    app.run_server(debug=False, host='0.0.0.0', port=port)
