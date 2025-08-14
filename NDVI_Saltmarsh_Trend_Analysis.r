@@ -1,23 +1,45 @@
-# NDVI Trend Analysis for Saltmarsh Sites
+# NDVI Trend Analysis for Saltmarsh Sites (1990-2024)
+# Updated to work with Google Earth Engine exports
+
 # Load required libraries
-install.packages(c("trend", "dplyr", "ggplot2"))
+if (!require("trend")) install.packages("trend")
+if (!require("dplyr")) install.packages("dplyr")
+if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("tidyr")) install.packages("tidyr")
+
 library(trend)
 library(dplyr)
 library(ggplot2)
+library(tidyr)
 
-# Create the dataset
-ndvi_data <- data.frame(
-  Year = 2005:2024,
-  Airport_Boardwalk = c(0.148, 0.147, 0.142, 0.142, 0.156, 0.129, 0.169, 0.190, 0.181, 0.196, 0.175, 0.197, 0.177, 0.203, 0.223, 0.211, 0.214, 0.218, 0.240, 0.234),
-  Federal_Police = c(0.137, 0.132, 0.135, 0.131, 0.142, 0.141, 0.158, 0.147, 0.155, 0.173, 0.139, 0.168, 0.173, 0.156, 0.177, 0.161, 0.173, 0.169, 0.194, 0.196),
-  Yorkeys_Knob = c(0.147, 0.166, 0.160, 0.158, 0.168, 0.182, 0.185, 0.176, 0.174, 0.195, 0.177, 0.187, 0.191, 0.187, 0.199, 0.192, 0.197, 0.200, 0.224, 0.225),
-  Machans_Site_B = c(0.205, 0.219, 0.194, 0.177, 0.208, 0.206, 0.204, 0.220, 0.217, 0.219, 0.219, 0.242, 0.238, 0.218, 0.244, 0.245, 0.255, 0.253, 0.289, 0.202),
-  Machans_Site_A = c(0.212, 0.231, 0.221, 0.180, 0.233, 0.256, 0.207, 0.241, 0.233, 0.239, 0.258, 0.268, 0.261, 0.228, 0.273, 0.263, 0.263, 0.273, 0.295, 0.219),
-  Trinity_Site_A = c(0.146, 0.159, 0.155, 0.152, 0.162, 0.125, 0.162, 0.172, 0.167, 0.161, 0.163, 0.184, 0.182, 0.180, 0.183, 0.172, 0.186, 0.189, 0.197, 0.200),
-  Trinity_Site_B = c(0.143, 0.155, 0.152, 0.152, 0.154, 0.106, 0.163, 0.160, 0.177, 0.176, 0.151, 0.185, 0.173, 0.185, 0.182, 0.168, 0.179, 0.173, 0.187, 0.188),
-  Thomats_Site_A = c(0.138, 0.219, 0.124, 0.138, 0.212, 0.238, 0.206, 0.200, 0.205, 0.184, 0.226, 0.278, 0.224, 0.189, 0.230, 0.233, 0.253, 0.241, 0.257, 0.244),
-  Thomats_Site_B = c(0.137, 0.239, 0.131, 0.138, 0.194, 0.193, 0.201, 0.187, 0.224, 0.189, 0.230, 0.278, 0.238, 0.192, 0.242, 0.253, 0.269, 0.250, 0.286, 0.266)
-)
+# Load the data exported from Google Earth Engine
+# Make sure these CSV files are in your working directory
+
+# Load NDVI time series data
+ndvi_raw <- read.csv("D:\\Saltmarsh Savers\\NDVI\\Data\\Saltmarsh_NDVI_TimeSeries_for_R_Analysis_1990_2024.csv")
+
+# Load rainfall data
+rainfall_raw <- read.csv("D:\\Saltmarsh Savers\\NDVI\\Data\\Wet_Tropics_Rainfall_for_R_Analysis_1990_2024.csv")
+
+# Preview the data structure
+cat("NDVI Data Structure:\n")
+print(head(ndvi_raw))
+cat("\nRainfall Data Structure:\n")
+print(head(rainfall_raw))
+
+# Reshape NDVI data to wide format (Year as rows, Sites as columns)
+ndvi_wide <- ndvi_raw %>%
+  select(Year, Site, NDVI) %>%
+  pivot_wider(names_from = Site, values_from = NDVI) %>%
+  arrange(Year)
+
+# Clean up site names (replace spaces/special characters with underscores for R)
+names(ndvi_wide)[-1] <- gsub("[^A-Za-z0-9]", "_", names(ndvi_wide)[-1])
+names(ndvi_wide)[-1] <- gsub("_{2,}", "_", names(ndvi_wide)[-1])  # Remove multiple underscores
+names(ndvi_wide)[-1] <- gsub("_$", "", names(ndvi_wide)[-1])     # Remove trailing underscores
+
+cat("\nNDVI Data (Wide Format):\n")
+print(head(ndvi_wide))
 
 # Function to calculate trend statistics for each site
 calculate_trends <- function(data) {
@@ -31,18 +53,28 @@ calculate_trends <- function(data) {
     MK_Trend = character(),
     Linear_Slope = numeric(),
     R_Squared = numeric(),
+    Period = character(),
     stringsAsFactors = FALSE
   )
   
   for(site in sites) {
+    # Remove NA values for analysis
+    site_data <- data[[site]][!is.na(data[[site]])]
+    years_data <- data$Year[!is.na(data[[site]])]
+    
+    if(length(site_data) < 10) {
+      cat(sprintf("Warning: Site %s has less than 10 data points, skipping...\n", site))
+      next
+    }
+    
     # Sen's Slope
-    sens_result <- sens.slope(data[[site]])
+    sens_result <- sens.slope(site_data)
     
     # Mann-Kendall Test
-    mk_result <- mk.test(data[[site]])
+    mk_result <- mk.test(site_data)
     
     # Linear regression for comparison
-    lm_result <- lm(data[[site]] ~ data$Year)
+    lm_result <- lm(site_data ~ years_data)
     lm_slope <- coef(lm_result)[2]
     r_squared <- summary(lm_result)$r.squared
     
@@ -60,31 +92,78 @@ calculate_trends <- function(data) {
       MK_Pvalue = round(mk_result$p.value, 4),
       MK_Trend = trend_direction,
       Linear_Slope = round(lm_slope, 6),
-      R_Squared = round(r_squared, 4)
+      R_Squared = round(r_squared, 4),
+      Period = "1990-2024"
     ))
   }
   
   return(results)
 }
 
-# Calculate trends
-trend_results <- calculate_trends(ndvi_data)
+# Calculate NDVI trends
+cat("\nCalculating NDVI trends...\n")
+ndvi_trend_results <- calculate_trends(ndvi_wide)
 
-# Sort by Sen's slope (strongest to weakest increase)
-trend_results <- trend_results[order(-trend_results$Sens_Slope), ]
+# Calculate rainfall trend
+cat("Calculating rainfall trends...\n")
+rainfall_data <- rainfall_raw %>%
+  select(Year, Annual_Rainfall_mm) %>%
+  arrange(Year)
+
+# Remove NA values
+rainfall_clean <- rainfall_data$Annual_Rainfall_mm[!is.na(rainfall_data$Annual_Rainfall_mm)]
+years_clean <- rainfall_data$Year[!is.na(rainfall_data$Annual_Rainfall_mm)]
+
+if(length(rainfall_clean) >= 10) {
+  # Sen's Slope for rainfall
+  rainfall_sens <- sens.slope(rainfall_clean)
+  rainfall_mk <- mk.test(rainfall_clean)
+  rainfall_lm <- lm(rainfall_clean ~ years_clean)
+  
+  rainfall_trend_direction <- ifelse(rainfall_mk$p.value < 0.05,
+                                   ifelse(rainfall_mk$statistic > 0, "Increasing", "Decreasing"),
+                                   "No significant trend")
+  
+  rainfall_results <- data.frame(
+    Variable = "Regional Rainfall",
+    Sens_Slope = round(rainfall_sens$estimates, 3),
+    Sens_Slope_Pvalue = round(rainfall_sens$p.value, 4),
+    MK_Tau = round(rainfall_mk$statistic, 4),
+    MK_Pvalue = round(rainfall_mk$p.value, 4),
+    MK_Trend = rainfall_trend_direction,
+    Linear_Slope = round(coef(rainfall_lm)[2], 3),
+    R_Squared = round(summary(rainfall_lm)$r.squared, 4),
+    Period = "1990-2024",
+    Units = "mm/year"
+  )
+} else {
+  cat("Warning: Insufficient rainfall data for trend analysis\n")
+  rainfall_results <- NULL
+}
+
+# Sort NDVI results by Sen's slope (strongest to weakest increase)
+ndvi_trend_results <- ndvi_trend_results[order(-ndvi_trend_results$Sens_Slope), ]
 
 # Display results
-print("NDVI Trend Analysis Results:")
-print("============================")
-print(trend_results)
+cat(paste0("\n", strrep("=", 50), "\n"))
+cat("NDVI TREND ANALYSIS RESULTS (1990-2024)\n")
+cat(paste0(strrep("=", 50), "\n"))
+print(ndvi_trend_results)
+
+if(!is.null(rainfall_results)) {
+  cat(paste0("\n", strrep("=", 50), "\n"))
+  cat("RAINFALL TREND ANALYSIS RESULTS (1990-2024)\n")
+  cat(paste0(strrep("=", 50), "\n"))
+  print(rainfall_results)
+}
 
 # Create summary interpretation
 cat("\n\nSUMMARY INTERPRETATION:\n")
 cat("=======================\n")
 
-significant_increasing <- trend_results[trend_results$MK_Trend == "Increasing", ]
+significant_increasing <- ndvi_trend_results[ndvi_trend_results$MK_Trend == "Increasing", ]
 if(nrow(significant_increasing) > 0) {
-  cat("Sites with statistically significant INCREASING trends:\n")
+  cat("Sites with statistically significant INCREASING NDVI trends:\n")
   for(i in 1:nrow(significant_increasing)) {
     cat(sprintf("- %s: +%.6f NDVI/year (p = %.4f)\n", 
                 significant_increasing$Site[i], 
@@ -93,9 +172,9 @@ if(nrow(significant_increasing) > 0) {
   }
 }
 
-significant_decreasing <- trend_results[trend_results$MK_Trend == "Decreasing", ]
+significant_decreasing <- ndvi_trend_results[ndvi_trend_results$MK_Trend == "Decreasing", ]
 if(nrow(significant_decreasing) > 0) {
-  cat("\nSites with statistically significant DECREASING trends:\n")
+  cat("\nSites with statistically significant DECREASING NDVI trends:\n")
   for(i in 1:nrow(significant_decreasing)) {
     cat(sprintf("- %s: %.6f NDVI/year (p = %.4f)\n", 
                 significant_decreasing$Site[i], 
@@ -104,9 +183,9 @@ if(nrow(significant_decreasing) > 0) {
   }
 }
 
-no_trend <- trend_results[trend_results$MK_Trend == "No significant trend", ]
+no_trend <- ndvi_trend_results[ndvi_trend_results$MK_Trend == "No significant trend", ]
 if(nrow(no_trend) > 0) {
-  cat("\nSites with NO significant trend:\n")
+  cat("\nSites with NO significant NDVI trend:\n")
   for(i in 1:nrow(no_trend)) {
     cat(sprintf("- %s: %.6f NDVI/year (p = %.4f)\n", 
                 no_trend$Site[i], 
@@ -115,33 +194,85 @@ if(nrow(no_trend) > 0) {
   }
 }
 
-# Optional: Create visualization
-create_trend_plot <- function(data, results) {
-  # Reshape data for plotting
-  library(tidyr)
-  plot_data <- data %>%
+# Rainfall vs NDVI trend comparison
+if(!is.null(rainfall_results)) {
+  cat(sprintf("\nREGIONAL RAINFALL TREND: %s\n", rainfall_results$MK_Trend))
+  cat(sprintf("- Rainfall change: %.3f mm/year (p = %.4f)\n", 
+              rainfall_results$Sens_Slope, rainfall_results$MK_Pvalue))
+  
+  cat("\nINTERPRETATION:\n")
+  if(nrow(significant_increasing) > 0) {
+    if(rainfall_results$MK_Trend == "No significant trend" || rainfall_results$MK_Trend == "Decreasing") {
+      cat("*** NDVI increases are occurring despite stable/decreasing rainfall ***\n")
+      cat("*** This supports the mangrove encroachment hypothesis! ***\n")
+    } else {
+      cat("Both NDVI and rainfall are increasing - consider climate vs. ecological drivers\n")
+    }
+  }
+}
+
+# Create visualization
+create_trend_plot <- function(ndvi_data, rainfall_data) {
+  # NDVI plot
+  plot_data <- ndvi_data %>%
+    select(-contains("_$")) %>%
     pivot_longer(cols = -Year, names_to = "Site", values_to = "NDVI") %>%
     mutate(Site = gsub("_", " ", Site))
   
-  # Create plot
-  p <- ggplot(plot_data, aes(x = Year, y = NDVI, color = Site)) +
-    geom_line(size = 1) +
-    geom_smooth(method = "lm", se = FALSE, linetype = "dashed", alpha = 0.7) +
+  p1 <- ggplot(plot_data, aes(x = Year, y = NDVI, color = Site)) +
+    geom_line(size = 0.8) +
+    geom_smooth(method = "lm", se = FALSE, linetype = "dashed", alpha = 0.7, size = 0.5) +
     theme_minimal() +
-    labs(title = "NDVI Trends by Site (2005-2024)",
+    labs(title = "NDVI Trends by Site (1990-2024)",
          subtitle = "Dashed lines show linear trends",
          x = "Year",
          y = "NDVI") +
     theme(legend.position = "bottom") +
     guides(color = guide_legend(ncol = 3))
   
-  return(p)
+  # Rainfall plot
+  p2 <- ggplot(rainfall_data, aes(x = Year, y = Annual_Rainfall_mm)) +
+    geom_line(color = "blue", size = 1) +
+    geom_smooth(method = "lm", se = TRUE, color = "darkblue", fill = "lightblue", alpha = 0.3) +
+    theme_minimal() +
+    labs(title = "Regional Rainfall Trend (1990-2024)",
+         subtitle = "Blue band shows 95% confidence interval",
+         x = "Year",
+         y = "Annual Rainfall (mm)")
+  
+  return(list(ndvi_plot = p1, rainfall_plot = p2))
 }
 
-# Create and display plot
-trend_plot <- create_trend_plot(ndvi_data, trend_results)
-print(trend_plot)
+# Create and display plots
+if(exists("ndvi_wide") && exists("rainfall_data")) {
+  plots <- create_trend_plot(ndvi_wide, rainfall_data)
+  
+  print(plots$ndvi_plot)
+  print(plots$rainfall_plot)
+}
 
 # Export results to CSV
-write.csv(trend_results, "ndvi_trend_analysis_results.csv", row.names = FALSE)
-cat("\n\nResults exported to 'ndvi_trend_analysis_results.csv'\n")
+write.csv(ndvi_trend_results, "ndvi_sens_slope_results_1990_2024.csv", row.names = FALSE)
+if(!is.null(rainfall_results)) {
+  write.csv(rainfall_results, "rainfall_sens_slope_results_1990_2024.csv", row.names = FALSE)
+}
+
+cat("\n\nResults exported to CSV files:\n")
+cat("- ndvi_sens_slope_results_1990_2024.csv\n")
+if(!is.null(rainfall_results)) {
+  cat("- rainfall_sens_slope_results_1990_2024.csv\n")
+}
+
+# Summary statistics
+cat(paste0("\n", strrep("=", 50), "\n"))
+cat("SUMMARY STATISTICS\n")
+cat(paste0(strrep("=", 50), "\n"))
+cat(sprintf("Analysis period: 1990-2024 (%d years)\n", max(ndvi_wide$Year) - min(ndvi_wide$Year) + 1))
+cat(sprintf("Number of sites analyzed: %d\n", ncol(ndvi_wide) - 1))
+cat(sprintf("Sites with increasing trends: %d\n", nrow(significant_increasing)))
+cat(sprintf("Sites with decreasing trends: %d\n", nrow(significant_decreasing)))
+cat(sprintf("Sites with no significant trend: %d\n", nrow(no_trend)))
+
+if(!is.null(rainfall_results)) {
+  cat(sprintf("Regional rainfall trend: %s\n", rainfall_results$MK_Trend))
+}
