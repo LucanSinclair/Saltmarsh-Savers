@@ -129,6 +129,9 @@ if not data_frames:
     print("Sample data created")
 else:
     data = pd.concat(data_frames, ignore_index=True)
+    # Ensure Threat Score and Value Score are numeric
+    data['Threat Score'] = pd.to_numeric(data['Threat Score'], errors='coerce')
+    data['Value Score'] = pd.to_numeric(data['Value Score'], errors='coerce')
     print(f"Data Loaded Successfully!")
     print(f"Total rows: {len(data)}")
     print(f"Columns: {data.columns.tolist()}")
@@ -503,14 +506,7 @@ def toggle_modal(click_data_threats, click_data_values, is_open, stored_click_da
 
     return is_open, '', stored_click_data
 
-@app.callback(
-    [Output('donut-chart', 'clickData'), Output('value-donut-chart', 'clickData')],
-    [Input('modal', 'is_open')]
-)
-def reset_click_data(is_open):
-    if not is_open:
-        return None, None
-    raise PreventUpdate
+## Removed callback that resets donut-chart.clickData and value-donut-chart.clickData to break dependency cycle
 
 # Fixed callback with stats updates
 @app.callback(

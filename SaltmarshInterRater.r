@@ -43,7 +43,7 @@ run_analysis <- function(excel_file) {
 }
 
 # Define the path to your Excel file
-excel_file <- "D:\\Saltmarsh Savers\\2024_SaltmarshSavers_DataForStats.xlsx"  # Path to file
+excel_file <- "E:\\Saltmarsh Savers\\2024_SaltmarshSavers_DataForStatsNEW.xlsx"  # Path to file
 
 # Run the analysis for all sheets (sites) in the Excel file
 analysis_results <- run_analysis(excel_file)
