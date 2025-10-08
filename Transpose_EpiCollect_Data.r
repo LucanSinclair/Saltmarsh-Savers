@@ -7,18 +7,21 @@
 library(data.table)
 
 # Read the CSV file
-data <- fread("D:\\Saltmarsh Savers\\form-1__super-saltmarsh-savers.csv")
+data <- fread("form-1__super-saltmarsh-savers.csv")
 
-# Define a vector of column names to remove
-columns_to_remove <- c("ec5_uuid", "created_at", "uploaded_at", "title", 
-                       "accuracy_5_Location", "UTM_Northing_5_Location", 
-                       "UTM_Easting_5_Location", "UTM_Zone_5_Location")
+# Define a vector of column names to remove (static identifiers)
+columns_to_remove <- c("ec5_uuid", "created_at", "uploaded_at", "title")
 
-# Remove columns with "Take_a_photo" in the header and the columns listed in columns_to_remove
-data <- data[, !grepl("Take_a_photo", names(data)) & !(names(data) %in% columns_to_remove), with = FALSE]
+# Remove columns by patterns (photos, comments, and any accuracy/UTM location fields for any form version)
+drop_patterns <- c(
+  "Take_a_photo",
+  "Comments",
+  "^accuracy_[0-9]+_Location$",
+  "^UTM_(Northing|Easting|Zone)_[0-9]+_Location$"
+)
 
-# Remove columns with "Comments" in the header and the columns listed in columns_to_remove
-data <- data[, !grepl("Comments", names(data)) & !(names(data) %in% columns_to_remove), with = FALSE]
+cols_to_drop <- Reduce("|", lapply(drop_patterns, function(p) grepl(p, names(data)))) | (names(data) %in% columns_to_remove)
+data <- data[, !cols_to_drop, with = FALSE]
 
 # Transpose the remaining data
 transposed_data <- t(data)
@@ -28,10 +31,10 @@ transposed_data_df <- as.data.frame(transposed_data, stringsAsFactors = FALSE)
 
 # Function to check if a string is a date or lat-long
 is_date_or_latlong <- function(x) {
-  # Regular expression for date (simple check for formats like YYYY-MM-DD, DD/MM/YYYY, etc.)
+  # Regular expression for date (simple check for formats like YYYY-MM-DD, DD/MM/YYYY)
   date_pattern <- "^([0-9]{4}-[0-9]{2}-[0-9]{2})$|^([0-9]{2}/[0-9]{2}/[0-9]{4})$"
-  # Regular expression for latitude and longitude (simple check for formats like degrees, minutes, seconds)
-  latlong_pattern <- latlong_pattern <- "^-?[0-9]+\\.?[0-9]+$"
+  # Regular expression for decimal latitude/longitude
+  latlong_pattern <- "^-?[0-9]+(\\.[0-9]+)?$"
   grepl(date_pattern, x) | grepl(latlong_pattern, x)
 }
 
@@ -59,12 +62,21 @@ new_row_names <- c("Site name", "Date", "Name of Surveyor", "Lat", "Long", "NRM 
                    "Terrestrial Retreat", "Mangrove Encroachment", "Weeds", "Drought/Water Stress", 
                    "Value this because..", "Notable Features", "Threatened By..", "Could be mmproved by..")
 
+
+# Check if the number of rows matches the number of new row names
+if (nrow(transposed_data_df) != length(new_row_names)) {
+  stop(paste0(
+    "Error: Number of rows in transposed_data_df (", nrow(transposed_data_df), ") does not match the length of new_row_names (", length(new_row_names), ").\n",
+    "Check your data and the new_row_names vector."
+  ))
+}
+
 # Set the row names of the transposed data frame to the original column names
 rownames(transposed_data_df) <- new_row_names
 
 # Include the original column names (now row names) as a separate column in the CSV:
 transposed_data_df <- cbind(Original_Column_Names = rownames(transposed_data_df), transposed_data_df)
 
-# Save the transposed data as a new file
-new_file_name <- "D:\\Saltmarsh Savers\\form-1__super-saltmarsh-savers_transposed.csv"
+# Save the transposed data as a new file (in the current working directory)
+new_file_name <- file.path(getwd(), "form-1__super-saltmarsh-savers_transposed.csv")
 write.csv(transposed_data_df, file = new_file_name, row.names = FALSE)
